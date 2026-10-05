@@ -1,0 +1,30 @@
+{
+  "env": "demo",
+  "mode": "paper",
+  "cities": [
+    {"name": "New York",     "series": "KXHIGHNY",   "lat": 40.7789, "lon": -73.9692,  "tz": "America/New_York"},
+    {"name": "Chicago",      "series": "KXHIGHCHI",  "lat": 41.7868, "lon": -87.7522,  "tz": "America/Chicago"},
+    {"name": "Miami",        "series": "KXHIGHMIA",  "lat": 25.7959, "lon": -80.2870,  "tz": "America/New_York"},
+    {"name": "Austin",       "series": "KXHIGHAUS",  "lat": 30.3208, "lon": -97.7604,  "tz": "America/Chicago"},
+    {"name": "Denver",       "series": "KXHIGHDEN",  "lat": 39.8561, "lon": -104.6737, "tz": "America/Denver"},
+    {"name": "Los Angeles",  "series": "KXHIGHLAX",  "lat": 33.9425, "lon": -118.4081, "tz": "America/Los_Angeles"},
+    {"name": "Philadelphia", "series": "KXHIGHPHIL", "lat": 39.8721, "lon": -75.2411,  "tz": "America/New_York"}
+  ],
+  "strategy": {
+    "min_edge_cents": 6,
+    "min_prob": 0.08,
+    "max_prob": 0.92,
+    "sigma_by_lead_day": [2.2, 3.0, 3.6, 4.2],
+    "min_hours_to_close": 3,
+    "max_lead_days": 2
+  },
+  "risk": {
+    "max_contracts_per_trade": 10,
+    "max_cost_per_trade_cents": 500,
+    "max_open_exposure_cents": 5000,
+    "max_daily_loss_cents": 1500,
+    "max_trades_per_cycle": 3,
+    "max_positions_per_event": 1,
+    "kill_switch_file": "STOP"
+  }
+}
