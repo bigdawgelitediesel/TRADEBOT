@@ -50,3 +50,22 @@ def test_invalid_inputs():
         probability_above(0, 1, 1, 0.001)
     with pytest.raises(ValueError):
         probability_above(1, 1, 0, 0.001)
+
+
+def test_live_spot_falls_through_sources_and_fails_loudly():
+    from kalshi_bot.btc import PriceUnavailable, live_spot
+
+    class Resp:
+        def __init__(self, data): self._d = data
+        def json(self): return self._d
+
+    class Session:
+        def __init__(self, ok_host): self.ok_host = ok_host
+        def get(self, url, params=None, timeout=None):
+            if self.ok_host in url:
+                return Resp({"data": {"amount": "81234.5"}})
+            raise ConnectionError("blocked")
+
+    assert live_spot(Session("coinbase")) == (81234.5, "coinbase")
+    with pytest.raises(PriceUnavailable, match="kraken.*coinbase.*bitstamp.*coingecko"):
+        live_spot(Session("nowhere"))

@@ -33,6 +33,7 @@ class BtcCall:
     p_above: float
     candles_used: int
     spot_age_s: float = 0.0
+    source: str = "kraken"
 
     @property
     def sigma_t_dollars(self) -> float:
@@ -69,7 +70,7 @@ class BtcCall:
         if conf < 0.58:
             worth = "Coin flip minus fees. Pass."
         return "\n".join([
-            f"BTC spot ${self.spot:,.2f} (Kraken, {self.spot_age_s:.0f}s old)   "
+            f"BTC spot ${self.spot:,.2f} ({self.source}, {self.spot_age_s:.0f}s old)   "
             f"1m vol {self.sigma_1m * 100:.3f}% from {self.candles_used} candles   "
             f"{self.minutes:g}m σ ≈ ${self.sigma_t_dollars:,.0f}",
             f"Strike ${self.strike:,.0f} is {self.distance:+,.0f} ({self.distance / self.spot * 100:+.2f}%) "
@@ -107,6 +108,45 @@ def make_call(spot: float, strike: float, minutes: float, closes: list[float],
                    candles_used=max(0, len(closes) - 1), spot_age_s=spot_age_s)
 
 
+class PriceUnavailable(RuntimeError):
+    """No live price source reachable. Never fall back to a stale number silently."""
+
+
+def _spot_kraken(s, t):
+    d = s.get(f"{KRAKEN}/Ticker", params={"pair": PAIR}, timeout=t).json()
+    return float(next(iter(d["result"].values()))["c"][0])
+
+
+def _spot_coinbase(s, t):
+    return float(s.get("https://api.coinbase.com/v2/prices/BTC-USD/spot", timeout=t).json()["data"]["amount"])
+
+
+def _spot_bitstamp(s, t):
+    return float(s.get("https://www.bitstamp.net/api/v2/ticker/btcusd/", timeout=t).json()["last"])
+
+
+def _spot_coingecko(s, t):
+    d = s.get("https://api.coingecko.com/api/v3/simple/price",
+              params={"ids": "bitcoin", "vs_currencies": "usd"}, timeout=t).json()
+    return float(d["bitcoin"]["usd"])
+
+
+SPOT_SOURCES = [("kraken", _spot_kraken), ("coinbase", _spot_coinbase),
+                ("bitstamp", _spot_bitstamp), ("coingecko", _spot_coingecko)]
+
+
+def live_spot(session: requests.Session | None = None, timeout: float = 6.0) -> tuple[float, str]:
+    """First source that answers wins. Raises PriceUnavailable if none do."""
+    session = session or requests.Session()
+    failures = []
+    for name, fn in SPOT_SOURCES:
+        try:
+            return fn(session, timeout), name
+        except Exception as exc:  # try the next one
+            failures.append(f"{name}: {type(exc).__name__}")
+    raise PriceUnavailable("no live BTC price source reachable (" + "; ".join(failures) + ")")
+
+
 class KrakenClient:
     def __init__(self, session: requests.Session | None = None, timeout: float = 10.0):
         self.session = session or requests.Session()
@@ -132,6 +172,11 @@ class KrakenClient:
 def live_call(minutes: float, strike: float, kraken: KrakenClient | None = None) -> BtcCall:
     kraken = kraken or KrakenClient()
     t0 = time.time()
-    spot = kraken.spot()
-    closes = kraken.closes_1m()
-    return make_call(spot, strike, minutes, closes, spot_age_s=time.time() - t0)
+    spot, source = live_spot(kraken.session)
+    try:
+        closes = kraken.closes_1m()
+    except Exception:
+        closes = []          # vol falls back to the default; the readout shows "0 candles"
+    call = make_call(spot, strike, minutes, closes, spot_age_s=time.time() - t0)
+    call.source = source
+    return call
