@@ -8,6 +8,7 @@
     python -m kalshi_bot loop -i 900    run a cycle every 900s until Ctrl-C
     python -m kalshi_bot positions      bot-tracked positions and daily P&L
     python -m kalshi_bot cancel-all     cancel every resting order (live only)
+    python -m kalshi_bot btc 8 85203    in 8 minutes, above or below $85,203? (read-only)
 """
 from __future__ import annotations
 
@@ -128,6 +129,18 @@ def cmd_positions(cfg: Config) -> int:
     return 0
 
 
+def cmd_btc(args_rest: list[str]) -> int:
+    from .btc import live_call
+    if len(args_rest) != 2:
+        print("usage: btc <minutes> <strike>   e.g.  btc 8 85203"); return 1
+    minutes = float(args_rest[0].lower().rstrip("minsh").rstrip("m"))
+    if args_rest[0].lower().endswith("h"):
+        minutes *= 60
+    strike = float(args_rest[1].replace(",", "").lstrip("$"))
+    print(live_call(minutes, strike).render())
+    return 0
+
+
 def cmd_cancel_all(cfg: Config, client: KalshiClient) -> int:
     n = Executor(client, live=True).cancel_stale_orders()
     print(f"cancelled {n} resting orders on {cfg.env}")
@@ -138,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="kalshi_bot", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["status", "keycheck", "discover", "scan", "run", "loop",
-                                        "positions", "cancel-all"])
+                                        "positions", "cancel-all", "btc"])
+    ap.add_argument("rest", nargs="*", help="arguments for btc: <minutes> <strike>")
     ap.add_argument("-i", "--interval", type=int, default=900, help="loop interval seconds")
     ap.add_argument("-c", "--config", default=None, help="path to config.json")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -147,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    if args.command == "btc":
+        return cmd_btc(args.rest)
 
     cfg = load_config(args.config)
     client, nws = build(cfg)
